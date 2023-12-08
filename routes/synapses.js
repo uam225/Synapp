@@ -37,7 +37,6 @@ router.post('/', verifyToken, async(req,res)=>{
 })
 
 // GET all synapses
-// GET all synapses
 router.get('/', verifyToken, async(req, res) => {
     try {
         const synapses = await Synapse.find();
