@@ -3,6 +3,7 @@ const router = express.Router()
 
 const Synapse = require('../models/Synapse.js')
 const verifyToken = require('../verifyToken')
+const { getRounds } = require('bcryptjs')
 
 //POST (Create a synapse)
 router.post('/', verifyToken, async(req,res)=>{
@@ -35,27 +36,48 @@ router.post('/', verifyToken, async(req,res)=>{
     }
 })
 
-// GET1 (Read)
+// GET all synapses
 // GET all synapses
 router.get('/', verifyToken, async(req, res) => {
     try {
         const synapses = await Synapse.find();
-        const synapsesWithStatus = synapses.map(synapse => {
+                
+        if (!synapses || synapses.length === 0) {
+            return res.status(404).send({ message: 'Synapses not found' });
+        }
+
+        const synapsesWithDetails = synapses.map(synapse => {
             const synapseObject = synapse.toObject();
             const statusInfo = synapse.getStatus();
+            // Convert time remaining to hours and minutes
+            const hours = Math.floor(statusInfo.timeRemaining / 60);
+            const minutes = Math.floor(statusInfo.timeRemaining % 60);
+            const timeRemainingFormatted = `${hours}h:${minutes}m`;
 
             return {
-                ...synapseObject,
+                _id: synapseObject._id,
+                title: synapseObject.title,
+                topic: synapseObject.topic,
+                timestamp: synapseObject.date,
+                timeRemaining: timeRemainingFormatted,
+                body: synapseObject.body,
+                expirationTime: synapseObject.expirationTime,
                 status: statusInfo.status,
-                timeRemaining: statusInfo.timeRemaining
+                owner: synapseObject.user,
+                likes: synapseObject.likes.length,
+                dislikes: synapseObject.dislikes.length,
+                comments: synapseObject.comments,
             };
         });
 
-        res.json(synapsesWithStatus);
+        res.json(synapsesWithDetails);
     } catch (err) {
         res.status(500).send({ message: err.message });
     }
 });
+
+
+
 
 
 //Get expired posts
@@ -74,15 +96,43 @@ router.get('/expiredSynapses/', verifyToken, async (req, res) => {
     }
 })
 
-//Get synapses by id (Read)
-router.get('/:synapseId', verifyToken, async(req,res)=>{
-    try{
-        const getSynapseById = await Synapse.findById(req.params.synapseId)
-        res.send(getSynapseById)
-    }catch(err){
-        res.status(400).send({message:err})
+// GET one synapse (by ID)
+router.get('/:synapseId', verifyToken, async(req, res) => {
+    try {
+        const synapse = await Synapse.findById(req.params.synapseId)
+                
+        if (!synapse) {
+            return res.status(404).send({ message: 'Synapse not found' });
+        }
+
+        const synapseObject = synapse.toObject();
+        const statusInfo = synapse.getStatus();
+        // Convert time remaining to hours and minutes
+        const hours = Math.floor(statusInfo.timeRemaining / 60);
+        const minutes = Math.floor(statusInfo.timeRemaining % 60);
+        const timeRemainingFormatted = `${hours}h:${minutes}m`;
+
+        const response = {
+            _id: synapseObject._id,
+            title: synapseObject.title,
+            topic: synapseObject.topic,
+            timestamp: synapseObject.date,
+            timeRemaining: timeRemainingFormatted, 
+            body: synapseObject.body,
+            expirationTime: synapseObject.expirationTime,
+            status: statusInfo.status,
+            owner: synapseObject.user,
+            likes: synapseObject.likes.length,
+            dislikes: synapseObject.dislikes.length,
+            comments: synapseObject.comments,
+        };
+
+        res.json(response);
+    } catch (err) {
+        res.status(500).send({ message: err.message });
     }
-})
+});
+
 
 //PATCH
 router.patch('/:synapseId', verifyToken, async(req,res)=>{
@@ -114,92 +164,79 @@ router.delete('/:synapseId', verifyToken,  async(req,res)=>{
         }
 })
 
-// Like
-router.post('/likes/:synapseId', verifyToken, async (req, res) => {
+//React
+router.post('/react/:synapseId', verifyToken, async (req, res) => {
     try {
         const synapse = await Synapse.findById(req.params.synapseId)
         if (!synapse) {
             return res.status(404).send('Synapse not found')
         }
 
-        if(synapse.checkExpiration()){
-            return res.status(404).send('This post has expired!')
+        // Check if the post has expired
+        const timeElapsed = (Date.now() - synapse.date.getTime()) / (1000 * 60) // Time elapsed in minutes
+        const expirationTime = synapse.expirationTime || 24 * 60; // Use default 24 hours if not set
+        if (timeElapsed > expirationTime) {
+            return res.status(400).send('This post has expired and cannot be reacted to')
         }
 
-        if(!synapse.likes) {
-            synapse.likes = [];
+        const userId = req.user._id
+        const reaction = req.body.reaction; // 'like', 'dislike'
+
+        // Remove existing like/dislike (if any)
+        synapse.likes = synapse.likes.filter(id => id.toString() !== userId.toString())
+        synapse.dislikes = synapse.dislikes.filter(id => id.toString() !== userId.toString())
+
+        // Apply new reaction
+        if (reaction === 'like') {
+            synapse.likes.push(userId);
+        } else if (reaction === 'dislike') {
+            synapse.dislikes.push(userId)
         }
 
-        const index = synapse.likes.indexOf(req.user._id)
-        if (index > -1) {
-            synapse.likes.splice(index, 1)
-        } else {
-            synapse.likes.push(req.user._id)
-        }
+        await synapse.save();
 
-        await synapse.save()
-        res.json(synapse)
+        res.json({
+            message: `Reaction updated to '${reaction}'`
+        });
     } catch (err) {
         res.status(500).send(err.message)
     }
 })
 
-//Dislike
-router.post('/dislikes/:synapseId', verifyToken, async (req, res) => {
-    try {
-        const synapse = await Synapse.findById(req.params.synapseId);
-        if (!synapse) {
-            return res.status(404).send('Synapse not found')
-        }
-
-        if(synapse.checkExpiration()){
-            return res.status(404).send('This post has expired!')
-        }
-
-        const index = synapse.dislikes.indexOf(req.user._id)
-        if (index > -1) {
-            synapse.dislikes.splice(index, 1)
-        } else {
-            synapse.dislikes.push(req.user._id)
-        }
-
-        await synapse.save()
-        res.json(synapse)
-    } catch (err) {
-        res.status(500).send(err.message)
-    }
-})
 
 //Comment
 router.post('/comments/:synapseId', verifyToken, async (req, res) => {
     try {
-        const synapse = await Synapse.findById(req.params.synapseId)
+        const synapse = await Synapse.findById(req.params.synapseId);
         if (!synapse) {
-            return res.status(404).send('Synapse not found')
+            return res.status(404).send('Synapse not found');
         }
 
-        if(synapse.checkExpiration()){
-            return res.status(404).send('This post has expired!')
-        }
-        
-        //Initialise comment array
-        if(!synapse.comments) {
-            synapse.comments=[]
+        // Check if the post has expired
+        const timeElapsed = (Date.now() - synapse.date.getTime()) / (1000 * 60); // Time elapsed in minutes
+        const expirationTime = synapse.expirationTime || 24 * 60; // Use default 24 hours if not set
+        if (timeElapsed > expirationTime) {
+            return res.status(400).send('This post has expired and cannot be commented on');
         }
 
+        // Add the new comment
         const newComment = {
             text: req.body.text,
             postedBy: req.user._id
         };
 
-        synapse.comments.push(newComment)
+        synapse.comments.push(newComment);
+        await synapse.save();
 
-        await synapse.save()
-        res.json(synapse)
+        res.json({
+            message: 'Comment added successfully',
+            comment: newComment
+        });
     } catch (err) {
-        res.status(500).send(err.message)
+        res.status(500).send(err.message);
     }
-})
+});
+
 
 //most active post
 router.get('/mostActiveSynapse/:topic', verifyToken, async (req, res) => {
