@@ -3,7 +3,7 @@ const router = express.Router()
 
 const Synapse = require('../models/Synapse.js')
 const verifyToken = require('../verifyToken')
-const { getRounds } = require('bcryptjs')
+//const { getRounds } = require('bcryptjs')
 
 //POST (Create a synapse)
 router.post('/', verifyToken, async(req,res)=>{
@@ -234,7 +234,22 @@ router.post('/comments/:synapseId', verifyToken, async (req, res) => {
     } catch (err) {
         res.status(500).send(err.message);
     }
+})
+
+router.get('/topic/:topic', verifyToken, async (req, res) => {
+    try {
+        const topic = req.params.topic;
+        const synapses = await Synapse.find({ topic: topic });
+
+        if (synapses.length === 0) {
+            return res.status(404).send({ message: 'No synapses found for this topic' });
+        }
+        res.json(synapses);
+    } catch (err) {
+        res.status(500).send({ message: err.message });
+    }
 });
+
 
 
 //most active post
