@@ -86,7 +86,7 @@ router.get('/expiredSynapses/', verifyToken, async (req, res) => {
             .sort({ date: -1 });
 
         if (expiredSynapses.length === 0) {
-            return res.status(404).send('No expired posts found')
+            return res.status(404).send('No expired synapses found')
         }
 
         res.json(expiredSynapses)
@@ -170,14 +170,16 @@ router.post('/react/:synapseId', verifyToken, async (req, res) => {
         if (!synapse) {
             return res.status(404).send('Synapse not found')
         }
-
+        // Check if the user is the owner of the synapse
+        if (synapse.username === req.username) {
+            return res.status(403).send('You cannot react to your own post');
+        }
         // Check if the post has expired
         const timeElapsed = (Date.now() - synapse.date.getTime()) / (1000 * 60) // Time elapsed in minutes
         const expirationTime = synapse.expirationTime || 24 * 60; // Use default 24 hours if not set
         if (timeElapsed > expirationTime) {
             return res.status(400).send('This post has expired and cannot be reacted to')
         }
-
         const userId = req.user._id
         const reaction = req.body.reaction; // 'like', 'dislike'
 
@@ -220,7 +222,7 @@ router.post('/comments/:synapseId', verifyToken, async (req, res) => {
 
         // Add the new comment
         const newComment = {
-            text: req.body.text,
+            text: req.body.comment,
             postedBy: req.user._id
         };
 
@@ -266,7 +268,7 @@ router.get('/mostActiveSynapse/:topic', verifyToken, async (req, res) => {
             },
             // Sort by total activity in descending order
             { $sort: { totalActivity: -1 } },
-            // Limit to the first document (most active post)
+            // Limit to the first (most active post
             { $limit: 1 }
         ]);
 
