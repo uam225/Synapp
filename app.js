@@ -21,6 +21,6 @@ mongoose.connect(process.env.DB_CONNECTOR).then(()=>{
     console.log('DB is connected...')
 })
 
-app.listen(3000, ()=>{
+app.listen(3001, ()=>{
     console.log('Server is running...')
 })
