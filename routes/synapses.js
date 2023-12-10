@@ -15,7 +15,7 @@ router.post('/', verifyToken, async(req,res)=>{
         user:req.body.user,
         hashtag:req.body.hashtag,
         location:req.body.location,
-        expirationTime:req.body.expiresIn
+        expirationTime:req.body.expirationTime
     })
     try {
         const synapseToSave = await synapseData.save();
@@ -74,10 +74,6 @@ router.get('/', verifyToken, async(req, res) => {
         res.status(500).send({ message: err.message });
     }
 });
-
-
-
-
 
 //Get expired posts
 router.get('/expiredSynapses/', verifyToken, async (req, res) => {
@@ -215,7 +211,7 @@ router.post('/comments/:synapseId', verifyToken, async (req, res) => {
 
         // Check if the post has expired
         const timeElapsed = (Date.now() - synapse.date.getTime()) / (1000 * 60); // Time elapsed in minutes
-        const expirationTime = synapse.expirationTime || 24 * 60; // Use default 24 hours if not set
+        const expirationTime = synapse.expirationTime || 1440; // Use default 24 hours if not set
         if (timeElapsed > expirationTime) {
             return res.status(400).send('This post has expired and cannot be commented on');
         }
@@ -246,13 +242,12 @@ router.get('/topic/:topic', verifyToken, async (req, res) => {
         if (synapses.length === 0) {
             return res.status(404).send({ message: 'No synapses found for this topic' });
         }
+        
         res.json(synapses);
     } catch (err) {
         res.status(500).send({ message: err.message });
     }
 });
-
-
 
 //most active post
 router.get('/mostActiveSynapse/:topic', verifyToken, async (req, res) => {

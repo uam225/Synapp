@@ -19,4 +19,3 @@ const loginValidation = (data) => {
 
 module.exports.registerValidation = registerValidation
 module.exports.loginValidation = loginValidation
-

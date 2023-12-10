@@ -62,7 +62,7 @@ const synapseSchema = mongoose.Schema({
     }
 })
 synapseSchema.methods.getStatus = function() {
-    const timeElapsed = (Date.now() - this.date) / (1000 * 60) // Time elapsed in minutes
+    const timeElapsed = (Date.now() - this.date.getTime()) / (1000 * 60) // Time elapsed in minutes
     const expirationTime = this.expirationTime || 24 * 60; // 24 hours in minutes as default
 
     const isExpired = timeElapsed > expirationTime
